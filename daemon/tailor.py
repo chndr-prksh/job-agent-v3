@@ -168,7 +168,11 @@ def _upload_to_storage(local_path: Path, job_id: str) -> str | None:
         storage_path = f"{job_id}/{local_path.name}"
         with open(local_path, "rb") as f:
             data = f.read()
-        # supabase-py upload signature
+        # Remove any existing file at this path so upload succeeds (idempotent overwrite)
+        try:
+            bucket.remove([storage_path])
+        except Exception:
+            pass
         bucket.upload(
             storage_path,
             data,
