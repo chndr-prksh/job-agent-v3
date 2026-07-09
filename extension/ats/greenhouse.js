@@ -81,7 +81,7 @@
         }));
     },
 
-    fill(profile) {
+    async fill(profile) {
       const fields = this.fields();
       const filled = [];
       const skipped = [];
@@ -102,9 +102,15 @@
           } else if (f.type === "file") {
             continue;
           } else {
-            f.el.value = matched.value;
-            fireEvent(f.el, "input");
-            fireEvent(f.el, "change");
+            // For text-like inputs: detect if it's a combobox / typeahead and handle the dropdown
+            const isCombo = isComboboxInput(f.el);
+            if (isCombo) {
+              await fillCombobox(f.el, matched.value);
+            } else {
+              f.el.value = matched.value;
+              fireEvent(f.el, "input");
+              fireEvent(f.el, "change");
+            }
           }
           filled.push({ name: f.name, label: f.label, value: matched.value, source: matched.source });
         } catch (e) {
@@ -287,6 +293,100 @@
       return true;
     }
     return false;
+  }
+
+  // ---- Combobox / typeahead handling (Greenhouse react-aria-combobox) ----
+
+  // Detect if an input is a combobox / typeahead (vs a plain text input)
+  function isComboboxInput(el) {
+    if (!el) return false;
+    if (el.tagName === "SELECT") return false;
+    // Greenhouse uses react-aria comboboxes — inputs have role=combobox, aria-autocomplete=list, or are inside a combobox wrapper
+    if (el.getAttribute("role") === "combobox") return true;
+    if (el.getAttribute("aria-autocomplete") === "list") return true;
+    if (el.getAttribute("aria-haspopup")) return true;
+    // Common Greenhouse CSS markers
+    if ((el.className || "").toLowerCase().includes("typeahead")) return true;
+    if ((el.className || "").toLowerCase().includes("combobox")) return true;
+    if (el.closest('[class*="typeahead" i], [class*="combobox" i]')) return true;
+    return false;
+  }
+
+  // Fill a combobox input. Types the value, waits for dropdown, picks the best matching option.
+  async function fillCombobox(input, value) {
+    if (!value) return;
+    const target = String(value);
+    // Focus first
+    input.focus();
+    // Use the native input value setter so React/aria picks up the change
+    const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+    if (nativeSetter) {
+      nativeSetter.call(input, target);
+    } else {
+      input.value = target;
+    }
+    fireEvent(input, "input");
+    fireEvent(input, "change");
+
+    // Wait for dropdown to populate
+    await new Promise((r) => setTimeout(r, 600));
+
+    // Find the popup listbox. Greenhouse renders it as a sibling div with role=listbox
+    // or via aria-controls on the input.
+    let listbox = null;
+    const ariaControls = input.getAttribute("aria-controls");
+    if (ariaControls) listbox = document.getElementById(ariaControls);
+    if (!listbox) {
+      listbox = document.querySelector('[role="listbox"][data-combobox-active="true"], [role="listbox"]:not([hidden])');
+    }
+    if (!listbox) {
+      // Walk up from the input looking for a sibling listbox
+      const wrapper = input.closest('[class*="combobox" i], [class*="typeahead" i], .field');
+      if (wrapper) {
+        listbox = wrapper.parentElement?.querySelector('[role="listbox"]');
+      }
+    }
+    if (!listbox) {
+      // Last resort: any visible listbox on the page
+      const all = Array.from(document.querySelectorAll('[role="listbox"]'));
+      listbox = all.find((lb) => {
+        const r = lb.getBoundingClientRect();
+        return r.width > 0 && r.height > 0;
+      });
+    }
+
+    if (!listbox) {
+      console.warn("[job-agent] combobox: no listbox found after typing", target);
+      return;
+    }
+
+    // Find best matching option (case-insensitive, contains-match)
+    const options = Array.from(listbox.querySelectorAll('[role="option"]'));
+    if (!options.length) {
+      console.warn("[job-agent] combobox: listbox has no options", target);
+      return;
+    }
+    const targetLower = target.toLowerCase();
+    let best = options.find((o) => (o.innerText || o.textContent || "").trim().toLowerCase() === targetLower);
+    if (!best) best = options.find((o) => (o.innerText || o.textContent || "").trim().toLowerCase().startsWith(targetLower));
+    if (!best) best = options.find((o) => (o.innerText || o.textContent || "").trim().toLowerCase().includes(targetLower));
+    if (!best) {
+      console.warn("[job-agent] combobox: no option matched", { target, options: options.map(o => o.innerText) });
+      // Keep typed value as fallback
+      return;
+    }
+
+    // Click via mousedown — Greenhouse listens on mousedown to commit before blur
+    const mouseDown = new MouseEvent("mousedown", { bubbles: true, cancelable: true, view: window });
+    best.dispatchEvent(mouseDown);
+    const click = new MouseEvent("click", { bubbles: true, cancelable: true, view: window });
+    best.dispatchEvent(click);
+
+    // Some comboboxes need an explicit selection event
+    const selectionEvent = new Event("change", { bubbles: true });
+    input.dispatchEvent(selectionEvent);
+
+    console.log("[job-agent] combobox selected:", { target, picked: (best.innerText || best.textContent || "").trim() });
   }
 
   window.__ATS_HANDLERS = window.__ATS_HANDLERS || {};
