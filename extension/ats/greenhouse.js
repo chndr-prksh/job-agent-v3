@@ -72,13 +72,17 @@
           } catch (e) {}
           return true;
         })
-        .map((el) => ({
-          el,
-          name: el.getAttribute("name") || "",
-          id: el.getAttribute("id") || "",
-          type: el.getAttribute("type") || el.tagName.toLowerCase(),
-          label: detectLabel(el),
-        }));
+        .map((el) => {
+          const isIntl = isIntlTelInput(el);
+          return {
+            el,
+            name: el.getAttribute("name") || "",
+            id: el.getAttribute("id") || "",
+            type: el.getAttribute("type") || el.tagName.toLowerCase(),
+            label: isIntl ? "PHONE_COUNTRY" : detectLabel(el),
+            is_intl_tel: isIntl,
+          };
+        });
     },
 
     async fill(profile) {
@@ -102,9 +106,10 @@
           } else if (f.type === "file") {
             continue;
           } else {
-            // For text-like inputs: detect if it's a combobox / typeahead and handle the dropdown
-            const isCombo = isComboboxInput(f.el);
-            if (isCombo) {
+            // Special case: intl-tel-input phone country (wrapper sets data-value)
+            if (isIntlTelInput(f.el)) {
+              setIntlTelCountry(f.el, matched.value);
+            } else if (isComboboxInput(f.el)) {
               await fillCombobox(f.el, matched.value);
             } else {
               f.el.value = matched.value;
@@ -248,8 +253,8 @@
     if (blob.includes("city") || (blob.includes("location") && !blob.includes("country") && !blob.includes("where") && !blob.includes("ethnicity") && !blob.includes("hispanic"))) {
       return { value: profile.location || "", source: "location" };
     }
-    // Country is OK here — most standalone "Country" labels are real country pickers
-    if (/^country\b/.test(label) || /\bcountry\b/.test(name)) {
+    // Country: only if not intl-tel-input (intl-tel is handled separately)
+    if (!field.is_intl_tel && (/^country\b/.test(label) || /\bcountry\b/.test(name))) {
       return { value: profile.country || "United States", source: "country" };
     }
 
@@ -293,6 +298,37 @@
       return true;
     }
     return false;
+  }
+
+  // ---- intl-tel-input handling ----
+  // intl-tel-input is a phone-number widget with a country picker hidden behind it.
+  // The "country" input inside is NOT a real combobox — its wrapper gets data-value
+  // and the popup is the same one for all 244 countries.
+  function isIntlTelInput(el) {
+    if (!el) return false;
+    if (el.id && el.id.startsWith("iti-")) return true;
+    if (el.closest && el.closest(".iti, .intl-tel-input, .phone-input__country")) return true;
+    if (el.classList && el.classList.contains("iti__search-input")) return true;
+    return false;
+  }
+
+  function setIntlTelCountry(countryInput, value) {
+    // Find the wrapper that holds data-value
+    const wrapper = countryInput.closest("[data-value]") || countryInput.closest(".iti, .intl-tel-input, .phone-input__country");
+    if (!wrapper) {
+      console.warn("[job-agent] intl-tel: no wrapper found");
+      return;
+    }
+    // value is something like "United States" — intl-tel-input uses ISO codes (us) or dial codes (+1)
+    // Just set data-value to the country name; the form's react handler reads this
+    wrapper.setAttribute("data-value", String(value));
+    // Some implementations also expect a hidden <input> with the iso code
+    const hidden = wrapper.querySelector('input[type="hidden"]');
+    if (hidden) {
+      // We don't know the ISO code without a lookup; set to lowercased name as fallback
+      hidden.value = String(value).toLowerCase().split(" ")[0].slice(0, 2);
+    }
+    console.log("[job-agent] intl-tel: set country data-value =", value);
   }
 
   // ---- Combobox / typeahead handling (Greenhouse react-aria-combobox) ----
