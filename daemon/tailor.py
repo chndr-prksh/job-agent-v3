@@ -156,7 +156,11 @@ def render_docx(payload: dict[str, Any], *, output_path: Path, profile: dict[str
 
 
 def _upload_to_storage(local_path: Path, job_id: str) -> str | None:
-    """Try to upload the .docx to Supabase Storage. Returns the storage path or None."""
+    """Try to upload the .docx to Supabase Storage. Returns the PUBLIC URL or None.
+
+    Storage layout: {bucket}/{job_id}/{filename}
+    Public URL form: {SUPABASE_URL}/storage/v1/object/public/{bucket}/{job_id}/{filename}
+    """
     if not config.RESUMES_BUCKET:
         return None
     try:
@@ -165,8 +169,14 @@ def _upload_to_storage(local_path: Path, job_id: str) -> str | None:
         with open(local_path, "rb") as f:
             data = f.read()
         # supabase-py upload signature
-        bucket.upload(storage_path, data, {"content-type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"})
-        return storage_path
+        bucket.upload(
+            storage_path,
+            data,
+            {"content-type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"},
+        )
+        public_url = f"{config.SUPABASE_URL}/storage/v1/object/public/{config.RESUMES_BUCKET}/{storage_path}"
+        log.info("Uploaded to storage: %s", public_url)
+        return public_url
     except Exception as e:
         log.warning("Storage upload failed (will fall back to local file_url): %s", e)
         return None
