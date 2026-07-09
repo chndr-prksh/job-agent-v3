@@ -263,6 +263,7 @@ def tailor_resume(job: dict, profile: dict, keywords: list[str] | None = None) -
         "file_path": str(output_path),
         "file_name": filename,
         "storage_path": storage_path,
+        "storage_uploaded": storage_path is not None,
         "version_id": version_id,
         "tailoring_notes": payload.get("tailoring_notes", ""),
         "keywords_surfaced": payload.get("keywords_surfaced", []),

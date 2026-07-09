@@ -132,6 +132,7 @@ def main() -> int:
     t = tailor.tailor_resume(job_row, profile, keywords=r.get("top_keywords"))
     print(f"  ok:           {t.get('ok')}")
     print(f"  file:         {t.get('file_path')}")
+    print(f"  uploaded:     {t.get('storage_uploaded')} ({t.get('storage_path') or 'LOCAL FALLBACK - extension cannot auto-attach'})")
     print(f"  notes:        {t.get('tailoring_notes')}")
     print(f"  cost:         ${t.get('llm_cost_usd')}")
 
