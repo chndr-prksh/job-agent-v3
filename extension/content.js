@@ -108,8 +108,16 @@
 
       // Attach resume
       showBanner("job-agent: attaching tailored resume...");
-      const tailored = await getTailoredResume(location.href);
-      console.log("[job-agent] tailored lookup result:", tailored);
+      // Strip URL hash so we match what's stored in jobs.apply_url
+      let lookupUrl = location.href;
+      try {
+        const u = new URL(lookupUrl);
+        u.hash = "";
+        lookupUrl = u.toString();
+        if (lookupUrl.endsWith("/")) lookupUrl = lookupUrl.slice(0, -1);
+      } catch (e) {}
+      const tailored = await getTailoredResume(lookupUrl);
+      console.log("[job-agent] tailored lookup result:", tailored, "lookup_url:", lookupUrl);
       if (tailored?.file_data_url && handler.attachResume) {
         const attachResult = await handler.attachResume(tailored.file_data_url, tailored.file_name);
         console.log("[job-agent] attach result:", attachResult);

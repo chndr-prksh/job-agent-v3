@@ -46,9 +46,19 @@ async function fetchTailored(jobUrl) {
     console.warn("[job-agent-bg] fetchTailored: no Supabase URL/key in storage");
     return null;
   }
+  // Strip URL hash (#application) and trailing query string for matching against stored apply_url
+  let normalized = jobUrl || "";
+  try {
+    const u = new URL(normalized);
+    u.hash = "";
+    normalized = u.toString();
+    if (normalized.endsWith("/")) normalized = normalized.slice(0, -1);
+  } catch (e) {
+    // fall back to original
+  }
   try {
     // Schema note: jobs column is apply_url (not url), resume_versions (not tailored_resumes)
-    const jobRes = await fetch(`${url}/rest/v1/jobs?apply_url=eq.${encodeURIComponent(jobUrl)}&limit=1`, {
+    const jobRes = await fetch(`${url}/rest/v1/jobs?apply_url=eq.${encodeURIComponent(normalized)}&limit=1`, {
       headers: { apikey: key, Authorization: `Bearer ${key}` },
     });
     if (!jobRes.ok) {
@@ -56,7 +66,7 @@ async function fetchTailored(jobUrl) {
       return null;
     }
     const jobs = await jobRes.json();
-    console.log("[job-agent-bg] jobs lookup:", { jobUrl, found: jobs?.length || 0, ids: (jobs || []).map(j => j.id) });
+    console.log("[job-agent-bg] jobs lookup:", { original: jobUrl, normalized, found: jobs?.length || 0, ids: (jobs || []).map(j => j.id) });
     if (!jobs?.length) return null;
     const job = jobs[0];
 
