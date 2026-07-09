@@ -44,39 +44,56 @@ async function fetchTailored(jobUrl) {
   ]);
   if (!url || !key) return null;
   try {
-    // Look up job by URL
-    const jobRes = await fetch(`${url}/rest/v1/jobs?url=eq.${encodeURIComponent(jobUrl)}&limit=1`, {
+    // Schema note: jobs column is apply_url (not url), resume_versions (not tailored_resumes)
+    const jobRes = await fetch(`${url}/rest/v1/jobs?apply_url=eq.${encodeURIComponent(jobUrl)}&limit=1`, {
       headers: { apikey: key, Authorization: `Bearer ${key}` },
     });
     const jobs = await jobRes.json();
     if (!jobs?.length) return null;
     const job = jobs[0];
 
-    // Look up tailored resume
-    const trRes = await fetch(`${url}/rest/v1/tailored_resumes?job_id=eq.${job.id}&limit=1`, {
+    const trRes = await fetch(`${url}/rest/v1/resume_versions?job_id=eq.${job.id}&order=created_at.desc&limit=1`, {
       headers: { apikey: key, Authorization: `Bearer ${key}` },
     });
     const trs = await trRes.json();
     if (!trs?.length) return { file_path: null, file_name: null };
     const tr = trs[0];
 
-    // If storage_path exists, fetch the actual file as data URL
+    // Try multiple storage paths: file_url may be a local path, a Supabase Storage URL, or just a URL.
     let file_data_url = null;
-    if (tr.storage_path) {
-      const fileRes = await fetch(`${url}/storage/v1/object/tailored/${tr.storage_path}`, {
-        headers: { apikey: key, Authorization: `Bearer ${key}` },
-      });
-      if (fileRes.ok) {
-        const blob = await fileRes.blob();
-        file_data_url = await blobToDataUrl(blob);
-      }
+    const candidate = tr.file_url;
+
+    if (!candidate) {
+      return { file_path: null, file_name: null };
     }
 
+    if (candidate.startsWith("data:")) {
+      file_data_url = candidate;
+    } else if (candidate.startsWith("http://") || candidate.startsWith("https://")) {
+      // Try public URL first (Supabase Storage public bucket). If 401/404, give up.
+      try {
+        const r = await fetch(candidate);
+        if (r.ok) {
+          const blob = await r.blob();
+          file_data_url = await blobToDataUrl(blob);
+        } else {
+          console.warn("[job-agent-bg] fetchTailored: storage fetch failed", r.status, candidate);
+        }
+      } catch (e) {
+        console.warn("[job-agent-bg] fetchTailored: storage fetch exception", e);
+      }
+    } else {
+      // Local filesystem path — extension cannot read it (security boundary).
+      // User must drag from Downloads.
+      console.log("[job-agent-bg] fetchTailored: local path, user must drag", candidate);
+    }
+
+    const file_name = (candidate || "").split("/").pop() || "resume.pdf";
+
     return {
-      file_path: tr.file_path,
-      file_name: tr.file_name,
+      file_path: candidate,
+      file_name,
       file_data_url,
-      storage_path: tr.storage_path,
     };
   } catch (e) {
     console.warn("[job-agent-bg] fetchTailored error", e);

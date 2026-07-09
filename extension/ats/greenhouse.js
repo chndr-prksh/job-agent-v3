@@ -118,13 +118,35 @@
       const fileInputs = Array.from(document.querySelectorAll('input[type="file"]'));
       if (!fileInputs.length) return { ok: false, error: "no file input found" };
       const input = fileInputs[0];
+
+      // Detect MIME from extension if not provided
+      let mime = "application/octet-stream";
+      if (resumeName && resumeName.toLowerCase().endsWith(".pdf")) mime = "application/pdf";
+      else if (resumeName && resumeName.toLowerCase().endsWith(".docx")) mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+      else if (resumeName && resumeName.toLowerCase().endsWith(".doc")) mime = "application/msword";
+
       try {
         const blob = await (await fetch(resumeDataUrl)).blob();
+        const typedBlob = new Blob([blob], { type: mime });
+        const file = new File([typedBlob], resumeName, { type: mime, lastModified: Date.now() });
         const dt = new DataTransfer();
-        dt.items.add(new File([blob], resumeName, { type: "application/pdf" }));
+        dt.items.add(file);
         input.files = dt.files;
+
+        // Greenhouse is React-controlled — must dispatch synthetic events to trigger handlers.
+        // Native change alone isn't enough. Use InputEvent + bubble.
+        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "files")?.set;
+        if (nativeInputValueSetter) {
+          nativeInputValueSetter.call(input, dt.files);
+        }
+        fireEvent(input, "input");
         fireEvent(input, "change");
-        return { ok: true, attached: resumeName };
+
+        // Confirm file actually got set
+        if (input.files && input.files.length > 0 && input.files[0].name === resumeName) {
+          return { ok: true, attached: resumeName };
+        }
+        return { ok: false, error: "browser refused to set files" };
       } catch (e) {
         return { ok: false, error: String(e) };
       }
