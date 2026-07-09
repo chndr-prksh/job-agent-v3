@@ -136,8 +136,14 @@
         showBanner("job-agent: filled. No Next/Submit found — review and submit manually.", "info");
       }
     } catch (e) {
-      console.error("[job-agent] pipeline error", e);
-      showBanner(`job-agent: error: ${e.message}`, "error");
+      // "Extension context invalidated" is benign — happens when the service worker
+      // is reloaded mid-call. Don't show an alarming banner.
+      if (String(e.message || "").includes("Extension context invalidated")) {
+        console.warn("[job-agent] service worker reloaded; please click 🤖 again if needed", e);
+      } else {
+        console.error("[job-agent] pipeline error", e);
+        showBanner(`job-agent: error: ${e.message}`, "error");
+      }
     } finally {
       busy = false;
     }

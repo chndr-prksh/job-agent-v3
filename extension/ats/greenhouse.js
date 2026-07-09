@@ -148,8 +148,21 @@
       const btns = Array.from(document.querySelectorAll('button, input[type="submit"]'));
       return btns.find((b) => {
         const t = (b.innerText || b.value || "").trim().toLowerCase();
-        return t.includes("submit");
+        if (t.includes("submit")) return true;
+        if (t.includes("send application")) return true;
+        if (t.includes("apply now")) return true;
+        // Greenhouse forms often have a button[data-mapped-to-application-form]
+        if (b.matches('[data-mapped-to-application-form], button[type="submit"]')) return true;
+        // Geotab / Greenhouse: input with id like 'submit_app' or 'application--submit'
+        if (b.id && /submit|apply/i.test(b.id)) return true;
+        return false;
       });
+    },
+
+    clickSubmit() {
+      const btn = this.hasSubmitButton();
+      if (btn) { btn.click(); return true; }
+      return false;
     },
   };
 
