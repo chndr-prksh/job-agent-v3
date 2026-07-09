@@ -46,29 +46,36 @@ async function fetchTailored(jobUrl) {
     console.warn("[job-agent-bg] fetchTailored: no Supabase URL/key in storage");
     return null;
   }
-  // Strip URL hash (#application) and trailing query string for matching against stored apply_url
-  let normalized = jobUrl || "";
-  try {
-    const u = new URL(normalized);
-    u.hash = "";
-    normalized = u.toString();
-    if (normalized.endsWith("/")) normalized = normalized.slice(0, -1);
-  } catch (e) {
-    // fall back to original
+  // Strip URL hash (#application) and trailing slash; try multiple variants
+  const candidates = [];
+  if (jobUrl) {
+    candidates.push(jobUrl);
+    try {
+      const u = new URL(jobUrl);
+      u.hash = "";
+      let noHash = u.toString();
+      if (noHash.endsWith("/")) noHash = noHash.slice(0, -1);
+      if (!candidates.includes(noHash)) candidates.push(noHash);
+    } catch (e) {}
   }
   try {
     // Schema note: jobs column is apply_url (not url), resume_versions (not tailored_resumes)
-    const jobRes = await fetch(`${url}/rest/v1/jobs?apply_url=eq.${encodeURIComponent(normalized)}&limit=1`, {
-      headers: { apikey: key, Authorization: `Bearer ${key}` },
-    });
-    if (!jobRes.ok) {
-      console.warn("[job-agent-bg] jobs fetch failed:", jobRes.status, await jobRes.text());
-      return null;
+    let job = null;
+    let matchedCandidate = null;
+    for (const candidate of candidates) {
+      const jobRes = await fetch(`${url}/rest/v1/jobs?apply_url=eq.${encodeURIComponent(candidate)}&limit=1`, {
+        headers: { apikey: key, Authorization: `Bearer ${key}` },
+      });
+      if (!jobRes.ok) continue;
+      const found = await jobRes.json();
+      if (found?.length) {
+        job = found[0];
+        matchedCandidate = candidate;
+        break;
+      }
     }
-    const jobs = await jobRes.json();
-    console.log("[job-agent-bg] jobs lookup:", { original: jobUrl, normalized, found: jobs?.length || 0, ids: (jobs || []).map(j => j.id) });
-    if (!jobs?.length) return null;
-    const job = jobs[0];
+    console.log("[job-agent-bg] jobs lookup:", { original: jobUrl, candidates, found: job ? 1 : 0, matched: matchedCandidate, id: job?.id });
+    if (!job) return null;
 
     const trRes = await fetch(`${url}/rest/v1/resume_versions?job_id=eq.${job.id}&order=created_at.desc&limit=1`, {
       headers: { apikey: key, Authorization: `Bearer ${key}` },

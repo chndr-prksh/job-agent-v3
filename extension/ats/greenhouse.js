@@ -223,8 +223,23 @@
       return { value: profile.work_authorization?.needs_sponsorship ? "yes" : "no", source: "sponsorship" };
     }
 
-    // Location (after work-auth so the work-auth question's "country" mention doesn't win)
-    if (blob.includes("city") || (blob.includes("location") && !blob.includes("country") && !blob.includes("where"))) {
+    // EEOC / Demographics (these are RADIO/Select for "yes/no" or "I decline")
+    // MUST come before any location/ethnicity guesses
+    if (blob.includes("hispanic") || blob.includes("latino") || blob.includes("ethnicity") || blob.includes("race")) {
+      return { value: "decline", source: "eeoc.race" };
+    }
+    if (blob === "gender" || /\bgender\b/.test(blob)) {
+      return { value: profile.demographics?.gender || "decline", source: "eeoc.gender" };
+    }
+    if (blob.includes("veteran")) {
+      return { value: "I am not a protected veteran", source: "eeoc.veteran" };
+    }
+    if (blob.includes("disability")) {
+      return { value: "I don't have a disability", source: "eeoc.disability" };
+    }
+
+    // Location (after work-auth + EEOC so those questions don't get mis-classified as location)
+    if (blob.includes("city") || (blob.includes("location") && !blob.includes("country") && !blob.includes("where") && !blob.includes("ethnicity") && !blob.includes("hispanic"))) {
       return { value: profile.location || "", source: "location" };
     }
     // Country is OK here — most standalone "Country" labels are real country pickers
