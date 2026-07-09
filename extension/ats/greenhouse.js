@@ -29,7 +29,14 @@
     if (prev && prev.tagName === "LABEL") return getText(prev);
     const ancestorLabel = el.parentElement && el.parentElement.querySelector("label");
     if (ancestorLabel && ancestorLabel !== el) return getText(ancestorLabel);
-    return el.getAttribute("data-qa") || el.getAttribute("aria-label") || "";
+    // Greenhouse: labels often live in a sibling label/legend or higher up. Walk up.
+    let container = el.parentElement;
+    for (let i = 0; i < 5 && container; i++) {
+      const lab = container.querySelector(':scope > label, :scope > .field-label, :scope > legend');
+      if (lab && lab !== el) return getText(lab);
+      container = container.parentElement;
+    }
+    return el.getAttribute("data-qa") || el.getAttribute("aria-label") || el.id || "";
   }
 
   const Greenhouse = {
@@ -39,7 +46,7 @@
       // Loosened: any Greenhouse URL with apply/job pattern OR known form selectors OR visible inputs
       const url = location.href.toLowerCase();
       if (url.includes('greenhouse.io') && (url.includes('/jobs/') || url.includes('#application') || url.includes('application') || url.includes('apply'))) return true;
-      if (document.querySelector('form#application_form, form.application-form, [data-mapped-to-application-form]')) return true;
+      if (document.querySelector('form#application_form, form#application-form, form.application-form, [class*="application--form" i], [data-mapped-to-application-form]')) return true;
       // Greenhouse embedded forms
       if (document.querySelector('[data-testid*="application"], [class*="application-form" i], form[class*="job-application" i]')) return true;
       // Fallback: if there are many form inputs on a greenhouse page, treat it as apply
@@ -57,6 +64,8 @@
       return inputs
         .filter((el) => {
           if (el.type === 'hidden') return false;
+          // Skip intl-tel-input's hidden country search box
+          if (el.id && el.id.includes('iti-') && el.id.includes('__search-input')) return false;
           try {
             const style = window.getComputedStyle ? window.getComputedStyle(el) : null;
             if (style && (style.display === 'none' || style.visibility === 'hidden')) return false;
@@ -148,15 +157,21 @@
   function matchField(field, profile) {
     const label = (field.label || "").toLowerCase();
     const name = field.name.toLowerCase();
-    const blob = `${label} ${name}`;
+    const id = (field.id || "").toLowerCase();
+    const blob = `${label} ${name} ${id}`;
 
-    // Identity
-    if (blob.includes("first") && blob.includes("name") && !blob.includes("last"))
+    // Identity — match by id first (Geotab uses id without name)
+    if (id === 'first_name' || (blob.includes("first") && blob.includes("name") && !blob.includes("last")))
       return { value: profile.first_name || splitName(profile.full_name)[0] || "", source: "first_name" };
-    if (blob.includes("last") && blob.includes("name"))
+    if (id === 'last_name' || (blob.includes("last") && blob.includes("name")))
       return { value: profile.last_name || splitName(profile.full_name)[1] || "", source: "last_name" };
     if (blob.includes("preferred") && blob.includes("first"))
       return { value: profile.first_name || "", source: "first_name" };
+
+    // Education (school--0 / degree--0 patterns)
+    if (id.startsWith('school') || blob.includes("school")) return { value: ((profile.education && profile.education[0]) || {}).school || "", source: "education.school" };
+    if (id.startsWith('degree') || blob.includes("degree")) return { value: ((profile.education && profile.education[0]) || {}).degree || "", source: "education.degree" };
+    if (id.startsWith('discipline') || blob.includes("discipline") || blob.includes("major")) return { value: ((profile.education && profile.education[0]) || {}).discipline || "", source: "education.discipline" };
 
     // Contact
     if (blob.includes("email")) return { value: profile.email || "", source: "email" };
