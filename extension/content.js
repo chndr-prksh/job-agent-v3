@@ -109,15 +109,23 @@
       // Attach resume
       showBanner("job-agent: attaching tailored resume...");
       const tailored = await getTailoredResume(location.href);
+      console.log("[job-agent] tailored lookup result:", tailored);
       if (tailored?.file_data_url && handler.attachResume) {
         const attachResult = await handler.attachResume(tailored.file_data_url, tailored.file_name);
+        console.log("[job-agent] attach result:", attachResult);
         if (attachResult.ok) {
           showBanner(`job-agent: attached ${attachResult.attached}`, "ok");
         } else {
           showBanner(`job-agent: resume attach failed: ${attachResult.error}. Drag from Downloads.`, "warn");
         }
+      } else if (tailored === null) {
+        showBanner("job-agent: storage fetch returned null (job not in Supabase OR no resume_versions row).", "warn");
+        console.warn("[job-agent] tailored is null. Check Supabase jobs.apply_url + resume_versions.job_id");
+      } else if (!tailored.file_data_url) {
+        showBanner(`job-agent: found resume record but file_data_url is null. file_path: ${tailored.file_path || 'none'}. Run the daemon to upload.`, "warn");
+        console.warn("[job-agent] tailored has no file_data_url:", tailored);
       } else {
-        showBanner("job-agent: no tailored resume found in Supabase for this URL. Tailor via Telegram first.", "warn");
+        showBanner("job-agent: this ATS doesn't support resume attach. Drag from Downloads.", "warn");
       }
 
       // Check Submit

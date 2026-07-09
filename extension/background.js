@@ -42,20 +42,33 @@ async function fetchTailored(jobUrl) {
   const { [SUPABASE_URL_KEY]: url, [SUPABASE_KEY_KEY]: key } = await chrome.storage.local.get([
     SUPABASE_URL_KEY, SUPABASE_KEY_KEY,
   ]);
-  if (!url || !key) return null;
+  if (!url || !key) {
+    console.warn("[job-agent-bg] fetchTailored: no Supabase URL/key in storage");
+    return null;
+  }
   try {
     // Schema note: jobs column is apply_url (not url), resume_versions (not tailored_resumes)
     const jobRes = await fetch(`${url}/rest/v1/jobs?apply_url=eq.${encodeURIComponent(jobUrl)}&limit=1`, {
       headers: { apikey: key, Authorization: `Bearer ${key}` },
     });
+    if (!jobRes.ok) {
+      console.warn("[job-agent-bg] jobs fetch failed:", jobRes.status, await jobRes.text());
+      return null;
+    }
     const jobs = await jobRes.json();
+    console.log("[job-agent-bg] jobs lookup:", { jobUrl, found: jobs?.length || 0, ids: (jobs || []).map(j => j.id) });
     if (!jobs?.length) return null;
     const job = jobs[0];
 
     const trRes = await fetch(`${url}/rest/v1/resume_versions?job_id=eq.${job.id}&order=created_at.desc&limit=1`, {
       headers: { apikey: key, Authorization: `Bearer ${key}` },
     });
+    if (!trRes.ok) {
+      console.warn("[job-agent-bg] resume_versions fetch failed:", trRes.status, await trRes.text());
+      return { file_path: null, file_name: null };
+    }
     const trs = await trRes.json();
+    console.log("[job-agent-bg] resume_versions lookup:", { job_id: job.id, found: trs?.length || 0, urls: (trs || []).map(t => t.file_url) });
     if (!trs?.length) return { file_path: null, file_name: null };
     const tr = trs[0];
 
