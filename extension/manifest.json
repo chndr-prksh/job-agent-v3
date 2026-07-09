@@ -12,11 +12,6 @@
   "host_permissions": [
     "https://*.greenhouse.io/*",
     "https://*.lever.co/*",
-    "https://*.ashbyhq.com/*",
-    "https://*.myworkdayjobs.com/*",
-    "https://*.icims.com/*",
-    "https://*.eightfold.ai/*",
-    "https://ats.rippling.com/*",
     "https://*.supabase.co/*"
   ],
   "background": {
@@ -26,12 +21,7 @@
     {
       "matches": [
         "https://*.greenhouse.io/*",
-        "https://*.lever.co/*",
-        "https://*.ashbyhq.com/*",
-        "https://*.myworkdayjobs.com/*",
-        "https://*.icims.com/*",
-        "https://*.eightfold.ai/*",
-        "https://ats.rippling.com/*"
+        "https://*.lever.co/*"
       ],
       "js": [
         "ats/detect.js",
@@ -39,18 +29,6 @@
         "ats/lever.js",
         "content.js"
       ],
-      "matches": [
-        "https://*.greenhouse.io/*",
-        "https://*.lever.co/*"
-      ],
-      "_unused_matches": [
-        "https://*.ashbyhq.com/*",
-        "https://*.myworkdayjobs.com/*",
-        "https://*.icims.com/*",
-        "https://*.eightfold.ai/*",
-        "https://ats.rippling.com/*"
-      ],
-      "_note": "Ashby/Workday/iCIMS/Eightfold/Rippling handlers coming soon — see detect.js to enable."
       "css": ["overlay.css"],
       "run_at": "document_idle"
     }
@@ -58,6 +36,5 @@
   "action": {
     "default_title": "job-agent-autofill",
     "default_popup": "popup.html"
-  },
-  "web_accessible_resources": []
+  }
 }
