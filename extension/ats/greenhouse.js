@@ -432,13 +432,47 @@
     }
 
     const targetLower = target.toLowerCase().trim();
-    let best = options.find((o) => (o.innerText || o.textContent || "").trim().toLowerCase() === targetLower);
-    if (!best) best = options.find((o) => (o.innerText || o.textContent || "").trim().toLowerCase().startsWith(targetLower));
-    if (!best) best = options.find((o) => (o.innerText || o.textContent || "").trim().toLowerCase().includes(targetLower));
+    const optionTexts = options.map((o) => (o.innerText || o.textContent || "").trim());
+
+    // Strategy 1: exact match
+    let best = options.find((o) => optionTexts[options.indexOf(o)].toLowerCase() === targetLower);
+    // Strategy 2: starts-with
+    if (!best) best = options.find((o) => optionTexts[options.indexOf(o)].toLowerCase().startsWith(targetLower));
+    // Strategy 3: contains (with word-boundary preference to avoid "Seattle" matching "Seattle, OH")
     if (!best) {
-      console.warn("[job-agent] combobox: no option matched", { target, count: options.length, samples: options.slice(0, 3).map(o => o.innerText) });
+      const wordBoundary = new RegExp(`\\b${targetLower.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`);
+      best = options.find((o) => wordBoundary.test(optionTexts[options.indexOf(o)].toLowerCase()));
+    }
+    // Strategy 4: any substring
+    if (!best) best = options.find((o) => optionTexts[options.indexOf(o)].toLowerCase().includes(targetLower));
+    // Strategy 5: pick first option that has ANY of the target's words
+    if (!best) {
+      const targetWords = targetLower.split(/\s+/).filter((w) => w.length >= 4);
+      best = options.find((o) => {
+        const optLower = optionTexts[options.indexOf(o)].toLowerCase();
+        return targetWords.some((w) => optLower.includes(w));
+      });
+    }
+    // Strategy 6: accept "Other", "Something else", "I prefer not to say", "N/A"
+    if (!best) {
+      const escapePatterns = ["other", "something else", "prefer not", "i prefer", "n/a", "none of", "doesn't apply", "not applicable", "decline"];
+      best = options.find((o) => {
+        const optLower = optionTexts[options.indexOf(o)].toLowerCase();
+        return escapePatterns.some((p) => optLower.includes(p));
+      });
+    }
+    // Strategy 7: just pick the first option (last resort, mark as escalation)
+    if (!best && options.length > 0) {
+      best = options[0];
+      console.warn("[job-agent] combobox: no good match, picking first option as fallback", { target, firstOption: optionTexts[0] });
+    }
+
+    if (!best) {
+      console.warn("[job-agent] combobox: no option at all", { target, count: options.length });
       return;
     }
+
+    const pickedText = optionTexts[options.indexOf(best)];
 
     // Click via mousedown + mouseup + click — Greenhouse listens on mousedown
     const mouseDown = new MouseEvent("mousedown", { bubbles: true, cancelable: true, view: window });
@@ -450,7 +484,7 @@
 
     fireEvent(input, "change");
     fireEvent(input, "blur");
-    console.log("[job-agent] combobox selected:", { target, picked: (best.innerText || best.textContent || "").trim() });
+    console.log("[job-agent] combobox selected:", { target, picked: pickedText });
   }
 
   window.__ATS_HANDLERS = window.__ATS_HANDLERS || {};
