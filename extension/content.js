@@ -103,7 +103,7 @@
 
       // Fill
       showBanner("job-agent: filling fields...");
-      const result = handler.fill(profile);
+      const result = await handler.fill(profile);
       console.log("[job-agent] fill result:", result);
 
       // Attach resume
