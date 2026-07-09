@@ -45,7 +45,10 @@ confident about. Anything that requires real human judgment (visa status, salary
 expectation) should be marked needs_escalation=true.
 
 CRITICAL: NEVER INVENT FACTS. Only use values from the candidate's profile
-or question bank. If a value is missing, mark needs_escalation=true.
+or question bank. If a value is missing, mark needs_escalation=true AND set
+"value" to null (NOT the string "None", NOT an empty string). The human will fill
+it manually. Empty string vs null: use null for needs_escalation=true; use empty
+string only for optional fields you intend to leave blank.
 
 Return STRICT JSON only:
 {
@@ -159,6 +162,13 @@ def plan_job(job: dict, profile: dict, resume_path: str | None = None) -> dict[s
     fields = parsed.get("fields") or []
     if not isinstance(fields, list):
         fields = []
+
+    # Post-process: convert literal "None" / "N/A" values into null + escalation
+    for f in fields:
+        v = f.get("value")
+        if isinstance(v, str) and v.strip().lower() in ("none", "n/a", "na", "null", "-"):
+            f["value"] = None
+            f["needs_escalation"] = True
 
     # Persist
     upsert_application_plan(
