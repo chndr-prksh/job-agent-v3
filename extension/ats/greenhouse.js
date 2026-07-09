@@ -36,7 +36,16 @@
     name: "greenhouse",
 
     isApplyPage() {
-      return !!document.querySelector('form#application_form, form.application-form, [data-mapped-to-application-form]');
+      // Loosened: any Greenhouse URL with apply/job pattern OR known form selectors OR visible inputs
+      const url = location.href.toLowerCase();
+      if (url.includes('greenhouse.io') && (url.includes('/jobs/') || url.includes('#application') || url.includes('application') || url.includes('apply'))) return true;
+      if (document.querySelector('form#application_form, form.application-form, [data-mapped-to-application-form]')) return true;
+      // Greenhouse embedded forms
+      if (document.querySelector('[data-testid*="application"], [class*="application-form" i], form[class*="job-application" i]')) return true;
+      // Fallback: if there are many form inputs on a greenhouse page, treat it as apply
+      const inputCount = document.querySelectorAll('input:not([type="hidden"]), textarea, select').length;
+      if (inputCount >= 4) return true;
+      return false;
     },
 
     isCaptchaPage() {
