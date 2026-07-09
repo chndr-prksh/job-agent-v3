@@ -316,76 +316,104 @@
   async function fillCombobox(input, value) {
     if (!value) return;
     const target = String(value);
-    // Focus first
     input.focus();
-    // Use the native input value setter so React/aria picks up the change
-    const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
-    if (nativeSetter) {
-      nativeSetter.call(input, target);
-    } else {
-      input.value = target;
-    }
-    fireEvent(input, "input");
-    fireEvent(input, "change");
 
-    // Wait for dropdown to populate
-    await new Promise((r) => setTimeout(r, 600));
-
-    // Find the popup listbox. Greenhouse renders it as a sibling div with role=listbox
-    // or via aria-controls on the input.
-    let listbox = null;
-    const ariaControls = input.getAttribute("aria-controls");
-    if (ariaControls) listbox = document.getElementById(ariaControls);
-    if (!listbox) {
-      listbox = document.querySelector('[role="listbox"][data-combobox-active="true"], [role="listbox"]:not([hidden])');
-    }
-    if (!listbox) {
-      // Walk up from the input looking for a sibling listbox
-      const wrapper = input.closest('[class*="combobox" i], [class*="typeahead" i], .field');
-      if (wrapper) {
-        listbox = wrapper.parentElement?.querySelector('[role="listbox"]');
+    // Greenhouse's custom select widget needs KEYSTROKES to open, not just input events.
+    // Strategy: clear input, simulate real keystrokes character by character.
+    // Each keystroke fires: keydown, keypress, input, keyup — Greenhouse opens the popup on first char.
+    try {
+      const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+      if (nativeSetter) {
+        nativeSetter.call(input, "");
+      } else {
+        input.value = "";
       }
-    }
-    if (!listbox) {
-      // Last resort: any visible listbox on the page
-      const all = Array.from(document.querySelectorAll('[role="listbox"]'));
-      listbox = all.find((lb) => {
-        const r = lb.getBoundingClientRect();
-        return r.width > 0 && r.height > 0;
-      });
+      fireEvent(input, "input");
+      await new Promise((r) => setTimeout(r, 100));
+    } catch (e) {}
+
+    // Type each character with a key event so the popup opens
+    for (let i = 0; i < target.length; i++) {
+      const ch = target[i];
+      const keydown = new KeyboardEvent("keydown", { key: ch, code: `Key${ch.toUpperCase()}`, bubbles: true, cancelable: true });
+      const keypress = new KeyboardEvent("keypress", { key: ch, bubbles: true, cancelable: true });
+      input.dispatchEvent(keydown);
+      input.dispatchEvent(keypress);
+      try {
+        const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+        if (nativeSetter) nativeSetter.call(input, target.slice(0, i + 1));
+        else input.value = target.slice(0, i + 1);
+      } catch (e) {
+        input.value = target.slice(0, i + 1);
+      }
+      const inputEvent = new Event("input", { bubbles: true, cancelable: true });
+      input.dispatchEvent(inputEvent);
+      const keyup = new KeyboardEvent("keyup", { key: ch, code: `Key${ch.toUpperCase()}`, bubbles: true, cancelable: true });
+      input.dispatchEvent(keyup);
+      await new Promise((r) => setTimeout(r, 30));
     }
 
+    // Wait for the popup to fully render
+    await new Promise((r) => setTimeout(r, 800));
+
+    // Find the popup. Greenhouse may render it in a portal at body level.
+    const allListboxes = Array.from(document.querySelectorAll('[role="listbox"]'));
+    const visible = allListboxes.find((lb) => {
+      const r = lb.getBoundingClientRect();
+      return r.width > 0 && r.height > 0;
+    });
+
+    if (!visible) {
+      // Last resort: send ArrowDown which forces many comboboxes to open their popup
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", code: "ArrowDown", bubbles: true, cancelable: true }));
+      await new Promise((r) => setTimeout(r, 500));
+    }
+
+    const listbox = visible || Array.from(document.querySelectorAll('[role="listbox"]')).find((lb) => {
+      const r = lb.getBoundingClientRect();
+      return r.width > 0 && r.height > 0;
+    });
+
     if (!listbox) {
-      console.warn("[job-agent] combobox: no listbox found after typing", target);
+      console.warn("[job-agent] combobox: still no listbox after ArrowDown", target);
+      // Just commit the typed value
+      fireEvent(input, "change");
+      fireEvent(input, "blur");
       return;
     }
 
-    // Find best matching option (case-insensitive, contains-match)
     const options = Array.from(listbox.querySelectorAll('[role="option"]'));
     if (!options.length) {
-      console.warn("[job-agent] combobox: listbox has no options", target);
+      console.warn("[job-agent] combobox: listbox empty", target);
       return;
     }
-    const targetLower = target.toLowerCase();
+
+    // Filter out the intl-tel-input phone country list (244 options starting with country codes)
+    const intlListbox = listbox.id && listbox.id.includes("iti-");
+    if (intlListbox) {
+      console.warn("[job-agent] combobox: only intl-tel-input listbox found, skipping", target);
+      return;
+    }
+
+    const targetLower = target.toLowerCase().trim();
     let best = options.find((o) => (o.innerText || o.textContent || "").trim().toLowerCase() === targetLower);
     if (!best) best = options.find((o) => (o.innerText || o.textContent || "").trim().toLowerCase().startsWith(targetLower));
     if (!best) best = options.find((o) => (o.innerText || o.textContent || "").trim().toLowerCase().includes(targetLower));
     if (!best) {
-      console.warn("[job-agent] combobox: no option matched", { target, options: options.map(o => o.innerText) });
-      // Keep typed value as fallback
+      console.warn("[job-agent] combobox: no option matched", { target, count: options.length, samples: options.slice(0, 3).map(o => o.innerText) });
       return;
     }
 
-    // Click via mousedown — Greenhouse listens on mousedown to commit before blur
+    // Click via mousedown + mouseup + click — Greenhouse listens on mousedown
     const mouseDown = new MouseEvent("mousedown", { bubbles: true, cancelable: true, view: window });
-    best.dispatchEvent(mouseDown);
+    const mouseUp = new MouseEvent("mouseup", { bubbles: true, cancelable: true, view: window });
     const click = new MouseEvent("click", { bubbles: true, cancelable: true, view: window });
+    best.dispatchEvent(mouseDown);
+    best.dispatchEvent(mouseUp);
     best.dispatchEvent(click);
 
-    // Some comboboxes need an explicit selection event
-    const selectionEvent = new Event("change", { bubbles: true });
-    input.dispatchEvent(selectionEvent);
-
+    fireEvent(input, "change");
+    fireEvent(input, "blur");
     console.log("[job-agent] combobox selected:", { target, picked: (best.innerText || best.textContent || "").trim() });
   }
 
