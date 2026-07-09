@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "job-agent-autofill",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Fills job application forms using your Supabase profile + tailored resume. Pauses for human at Submit.",
   "permissions": [
     "activeTab",
@@ -39,6 +39,18 @@
         "ats/lever.js",
         "content.js"
       ],
+      "matches": [
+        "https://*.greenhouse.io/*",
+        "https://*.lever.co/*"
+      ],
+      "_unused_matches": [
+        "https://*.ashbyhq.com/*",
+        "https://*.myworkdayjobs.com/*",
+        "https://*.icims.com/*",
+        "https://*.eightfold.ai/*",
+        "https://ats.rippling.com/*"
+      ],
+      "_note": "Ashby/Workday/iCIMS/Eightfold/Rippling handlers coming soon — see detect.js to enable."
       "css": ["overlay.css"],
       "run_at": "document_idle"
     }
@@ -47,10 +59,5 @@
     "default_title": "job-agent-autofill",
     "default_popup": "popup.html"
   },
-  "web_accessible_resources": [
-    {
-      "resources": ["overlay.html"],
-      "matches": ["<all_urls>"]
-    }
-  ]
+  "web_accessible_resources": []
 }
