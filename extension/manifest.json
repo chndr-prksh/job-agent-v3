@@ -1,0 +1,56 @@
+{
+  "manifest_version": 3,
+  "name": "job-agent-autofill",
+  "version": "0.1.0",
+  "description": "Fills job application forms using your Supabase profile + tailored resume. Pauses for human at Submit.",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "scripting",
+    "downloads"
+  ],
+  "host_permissions": [
+    "https://*.greenhouse.io/*",
+    "https://*.lever.co/*",
+    "https://*.ashbyhq.com/*",
+    "https://*.myworkdayjobs.com/*",
+    "https://*.icims.com/*",
+    "https://*.eightfold.ai/*",
+    "https://ats.rippling.com/*",
+    "https://*.supabase.co/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.greenhouse.io/*",
+        "https://*.lever.co/*",
+        "https://*.ashbyhq.com/*",
+        "https://*.myworkdayjobs.com/*",
+        "https://*.icims.com/*",
+        "https://*.eightfold.ai/*",
+        "https://ats.rippling.com/*"
+      ],
+      "js": [
+        "ats/detect.js",
+        "ats/greenhouse.js",
+        "ats/lever.js",
+        "content.js"
+      ],
+      "css": ["overlay.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "job-agent-autofill",
+    "default_popup": "popup.html"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["overlay.html"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

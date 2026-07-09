@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>job-agent settings</title>
+  <style>
+    body {
+      width: 360px;
+      padding: 16px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      font-size: 13px;
+      color: #111;
+    }
+    h1 { font-size: 16px; margin: 0 0 12px; }
+    label { display: block; margin: 8px 0 4px; font-weight: 500; }
+    input {
+      width: 100%;
+      padding: 6px 8px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      box-sizing: border-box;
+      font-size: 12px;
+    }
+    button {
+      width: 100%;
+      margin-top: 12px;
+      padding: 8px;
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    button:hover { background: #1d4ed8; }
+    .status {
+      margin-top: 8px;
+      padding: 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      background: #f3f4f6;
+    }
+    .status.ok { background: #d1fae5; color: #065f46; }
+    .status.err { background: #fee2e2; color: #991b1b; }
+  </style>
+</head>
+<body>
+  <h1>🤖 job-agent-autofill</h1>
+  <p style="margin: 0 0 12px; color: #555; font-size: 12px;">
+    Configure your Supabase project. The daemon fills these in for you.
+  </p>
+
+  <label>Supabase URL</label>
+  <input id="supabase-url" placeholder="https://YOUR_PROJECT.supabase.co">
+
+  <label>Supabase service_role key</label>
+  <input id="supabase-key" type="password" placeholder="eyJhbGc...">
+
+  <button id="save">Save</button>
+  <div id="status" class="status" style="display:none"></div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
