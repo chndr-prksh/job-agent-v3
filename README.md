@@ -1,4 +1,4 @@
-# job-agent v3
+# job-agent
 
 A daemon that watches your Supabase `jobs` queue, fetches each job posting,
 ranks it against your resume, and writes a tailored `.docx` resume — then
