@@ -132,4 +132,4 @@ job-agent-v3/
 - Never use residential proxies or anti-detect browsers.
 - Resume file picker requires a human (browser security boundary).
 - Submit happens in the user's real Chrome session.
-- Honest gaps are surfaced; never fabricate facts.
+- Honest gaps are surfaced; never fabricate facts..
